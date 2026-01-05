@@ -5,6 +5,7 @@ import pandas as pd
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
+
 URL = "https://transparencia.queimados.rj.gov.br/sincronia/apidados.rule?sys=LAI"
 
 PROJECT_ID = "monitorpublico"
@@ -16,25 +17,28 @@ YEARS = [2025, 2026]
 
 def load_credentials():
     """
-    Prioridade:
-    1) Credencial enviada via GitHub Secret (GCP_SERVICE_ACCOUNT)
-    2) key.json no diretório do projeto
+    Ordem de prioridade:
+    1) Credencial via GitHub Actions (GCP_KEYFILE_JSON)
+    2) key.json local
     """
 
-    secret_json = os.getenv("GCP_SERVICE_ACCOUNT")
+    secret_json = os.getenv("GCP_KEYFILE_JSON")
 
-    # GitHub Actions — credencial no secret
+    # GitHub Actions — credencial no Secret
     if secret_json:
-        print("🔐 Usando credenciais do GitHub Secret")
+        print("🔐 Usando credenciais do GitHub Secret (GCP_KEYFILE_JSON)")
         info = json.loads(secret_json)
         return service_account.Credentials.from_service_account_info(info)
 
     # Execução local — arquivo key.json
     if os.path.exists("key.json"):
-        print("📁 Usando credenciais do arquivo key.json")
+        print("📁 Usando credenciais locais (key.json)")
         return service_account.Credentials.from_service_account_file("key.json")
 
-    raise Exception("Nenhuma credencial encontrada. Configure key.json ou GCP_SERVICE_ACCOUNT")
+    raise RuntimeError(
+        "Nenhuma credencial encontrada.\n"
+        "Defina GCP_KEYFILE_JSON no ambiente ou crie key.json"
+    )
 
 
 def fetch_from_api(ano: int) -> pd.DataFrame:
@@ -103,17 +107,18 @@ def main():
     dfs = []
 
     for year in YEARS:
-            df = fetch_from_api(year)
+        df = fetch_from_api(year)
 
-            if df.empty:
-                continue
+        if df.empty:
+            continue
 
-            df["codigo_interno"] = df["codigo_interno"].astype(str)
+        df["codigo_interno"] = df["codigo_interno"].astype(str)
 
-            df = df[~df["codigo_interno"].isin(existing_ids)]
+        # Remove registros já existentes
+        df = df[~df["codigo_interno"].isin(existing_ids)]
 
-            if not df.empty:
-                dfs.append(df)
+        if not df.empty:
+            dfs.append(df)
 
     if not dfs:
         print("✔ Nenhum novo registro encontrado")

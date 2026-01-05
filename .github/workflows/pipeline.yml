@@ -3,7 +3,7 @@ name: Ingestao Despesas Queimados
 on:
   schedule:
     - cron: "0 17 * * *"
-  workflow_dispatch:      
+  workflow_dispatch:
 
 jobs:
   run-pipeline:
@@ -19,14 +19,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-
-      - name: Create GCP credentials file
-        run: |
-          echo "$GCP_KEYFILE_JSON" > key.json
-        env:
-          GCP_KEYFILE_JSON: ${{ secrets.GCP_KEYFILE_JSON }}
+        run: pip install -r requirements.txt
 
       - name: Create dbt profile
         run: |
@@ -42,23 +35,23 @@ jobs:
                 dataset: "despesas_queimados"
                 location: "US"
                 threads: 4
-                keyfile: "key.json"
           EOF
 
-
-
-
-      - name: Authenticate with service account
+      - name: Authenticate service account (no file)
         run: |
           python - <<'PY'
           import json
           from google.oauth2 import service_account
 
-          creds = service_account.Credentials.from_service_account_info(
-              json.loads('${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}')
-          )
+          CREDS = json.loads('${{ secrets.GCP_KEYFILE_JSON }}')
+
+          creds = service_account.Credentials.from_service_account_info(CREDS)
 
           print("Autenticação OK")
           PY
 
-
+      - name: Run ingestion script
+        env:
+          GCP_KEYFILE_JSON: ${{ secrets.GCP_KEYFILE_JSON }}
+        run: |
+          python scripts/ingest_queimados_despesas.py
