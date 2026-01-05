@@ -49,7 +49,7 @@ jobs:
         env:
           GOOGLE_APPLICATION_CREDENTIALS: key.json
         run: |
-          python scripts/ingest_queimados_despesas.py
+           python scripts/ingest_queimados_despesas.py
 
       - name: Run dbt transformations
         env:
