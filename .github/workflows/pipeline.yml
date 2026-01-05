@@ -45,11 +45,12 @@ jobs:
                 keyfile: "key.json"
           EOF
 
-      - name: Run ingestion script
+      - name: Criar arquivo de credenciais
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: key.json
+          GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
         run: |
-           python scripts/ingest_queimados_despesas.py
+          echo "$GCP_SERVICE_ACCOUNT" > key.json
+
 
       - name: Run dbt transformations
         env:

@@ -1,3 +1,4 @@
+import os
 import json
 import requests
 import pandas as pd
@@ -13,7 +14,30 @@ TABLE = "raw_despesas_todas"
 YEARS = [2025, 2026]
 
 
-def fetch_from_api(ano):
+def load_credentials():
+    """
+    Prioridade:
+    1) Credencial enviada via GitHub Secret (GCP_SERVICE_ACCOUNT)
+    2) key.json no diretório do projeto
+    """
+
+    secret_json = os.getenv("GCP_SERVICE_ACCOUNT")
+
+    # GitHub Actions — credencial no secret
+    if secret_json:
+        print("🔐 Usando credenciais do GitHub Secret")
+        info = json.loads(secret_json)
+        return service_account.Credentials.from_service_account_info(info)
+
+    # Execução local — arquivo key.json
+    if os.path.exists("key.json"):
+        print("📁 Usando credenciais do arquivo key.json")
+        return service_account.Credentials.from_service_account_file("key.json")
+
+    raise Exception("Nenhuma credencial encontrada. Configure key.json ou GCP_SERVICE_ACCOUNT")
+
+
+def fetch_from_api(ano: int) -> pd.DataFrame:
     payload = {
         "api": "despesas_todas",
         "ano": ano
@@ -24,13 +48,15 @@ def fetch_from_api(ano):
         "Accept": "application/json"
     }
 
+    print(f"📡 Consultando API para ano {ano}...")
+
     res = requests.post(URL, json=payload, headers=headers)
     res.raise_for_status()
 
     data = res.json()
 
     if data.get("status", "").lower() not in ("sucess", "success"):
-        print(f"[WARN] API retornou erro para ano {ano}: {data}")
+        print(f"⚠️ API retornou erro para {ano}: {data}")
         return pd.DataFrame()
 
     df = pd.DataFrame(data.get("dados", []))
@@ -40,8 +66,8 @@ def fetch_from_api(ano):
 
 def get_existing_ids(client):
     query = f"""
-        select distinct cast(codigo_interno as string) as codigo_interno
-        from `{PROJECT_ID}.{DATASET}.{TABLE}`
+        SELECT DISTINCT CAST(codigo_interno AS STRING) AS codigo_interno
+        FROM `{PROJECT_ID}.{DATASET}.{TABLE}`
     """
 
     try:
@@ -63,9 +89,9 @@ def load_to_bq(client, df):
 
 
 def main():
-    print("Iniciando ingestão...")
+    print("🚀 Iniciando ingestão incremental...")
 
-    credentials = service_account.Credentials.from_service_account_file("key.json")
+    credentials = load_credentials()
 
     client = bigquery.Client(
         credentials=credentials,
@@ -77,25 +103,27 @@ def main():
     dfs = []
 
     for year in YEARS:
-        df = fetch_from_api(year)
+            df = fetch_from_api(year)
 
-        if df.empty:
-            continue
+            if df.empty:
+                continue
 
-        df = df[~df["codigo_interno"].astype(str).isin(existing_ids)]
+            df["codigo_interno"] = df["codigo_interno"].astype(str)
 
-        if not df.empty:
-            dfs.append(df)
+            df = df[~df["codigo_interno"].isin(existing_ids)]
+
+            if not df.empty:
+                dfs.append(df)
 
     if not dfs:
-        print("Nenhum novo registro encontrado.")
+        print("✔ Nenhum novo registro encontrado")
         return
 
     final_df = pd.concat(dfs, ignore_index=True)
 
     load_to_bq(client, final_df)
 
-    print(f"Inseridos {len(final_df)} novos registros.")
+    print(f"✅ Inseridos {len(final_df)} novos registros.")
 
 
 if __name__ == "__main__":
