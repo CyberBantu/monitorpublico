@@ -1,0 +1,58 @@
+name: Ingestao Despesas Queimados
+
+on:
+  schedule:
+    - cron: "0 17 * * *"
+  workflow_dispatch:      
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Create GCP credentials file
+        run: |
+          echo "$GCP_KEYFILE_JSON" > key.json
+        env:
+          GCP_KEYFILE_JSON: ${{ secrets.GCP_KEYFILE_JSON }}
+
+      - name: Create dbt profile
+        run: |
+          mkdir -p profiles
+          cat > profiles/profiles.yml <<'EOF'
+          monitorpublico:
+            target: dev
+            outputs:
+              dev:
+                type: bigquery
+                method: service-account
+                project: "monitorpublico"
+                dataset: "despesas_queimados"
+                location: "US"
+                threads: 4
+                keyfile: "key.json"
+          EOF
+
+      - name: Run ingestion script
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: key.json
+        run: |
+          python scripts/ingest_queimados_despesas.py
+
+      - name: Run dbt transformations
+        env:
+          DBT_PROFILES_DIR: profiles
+        run: |
+          dbt run
