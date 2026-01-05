@@ -45,15 +45,20 @@ jobs:
                 keyfile: "key.json"
           EOF
 
-      - name: Criar arquivo de credenciais
-        env:
-          GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-        run: |
-          echo "$GCP_SERVICE_ACCOUNT" > key.json
 
 
-      - name: Run dbt transformations
-        env:
-          DBT_PROFILES_DIR: profiles
+
+      - name: Authenticate with service account
         run: |
-          dbt run
+          python - <<'PY'
+          import json
+          from google.oauth2 import service_account
+
+          creds = service_account.Credentials.from_service_account_info(
+              json.loads('${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}')
+          )
+
+          print("Autenticação OK")
+          PY
+
+
