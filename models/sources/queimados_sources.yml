@@ -1,0 +1,8 @@
+version: 2
+
+sources:
+  - name: queimados
+    database: monitorpublico
+    schema: despesas_queimados
+    tables:
+      - name: raw_despesas_todas

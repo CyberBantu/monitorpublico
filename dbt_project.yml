@@ -1,0 +1,21 @@
+name: 'monitorpublico'
+version: '1.0.0'
+profile: 'monitorpublico'
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+analysis-paths: ["analyses"]
+snapshot-paths: ["snapshots"]
+
+models:
+  monitorpublico:
+    sources:
+      +schema: raw
+    staging:
+      +schema: staging
+    intermediate:
+      +schema: intermediate
+    marts:
+      +schema: marts
