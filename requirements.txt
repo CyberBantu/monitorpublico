@@ -1,0 +1,6 @@
+dbt-bigquery
+google-cloud-bigquery
+google-auth
+pandas
+requests
+pyarrow
