@@ -12,6 +12,7 @@ transformacao as (
     select
         
         -- CONTROLE / CHAVES
+        EMP_PROCESSO_COMPLETO    as processo,
         SAFE_CAST(ano AS INT64)                         as ano_exercicio,
         SAFE_CAST(ano_api AS INT64)                     as ano_coleta,
 
