@@ -1,16 +1,16 @@
-{{
+{{ 
   config(
-    materialized = 'incremental',
-    unique_key = 'id_registro_api',
-    on_schema_change = 'sync_all_columns',
+    materialized='incremental',
+    unique_key='processo',
+    on_schema_change='sync_all_columns',
 
-    partition_by = {
+    partition_by={
       "field": "data_despesa",
       "data_type": "timestamp"
     },
 
-    cluster_by = ["orgao", "ano_exercicio"]
-  )
+    cluster_by=["orgao","ano_exercicio"]
+  ) 
 }}
 
 with base as (
@@ -18,16 +18,9 @@ with base as (
     from {{ ref('stg_queimados__despesas_todas') }}
 )
 
-select
-    *
+select *
 from base
 
 {% if is_incremental() %}
-
-    -- Só insere registros novos
-    where id_registro_api not in (
-        select id_registro_api
-        from {{ this }}
-    )
-
+  where processo not in (select processo from {{ this }})
 {% endif %}
