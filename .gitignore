@@ -11,6 +11,7 @@ testecarregamento.py
 
 # Service Account Keys - NUNCA commitar!
 *.json
+*.ipynb
 !dbt_project.json
 !package.json
 monitorpublico-*.json

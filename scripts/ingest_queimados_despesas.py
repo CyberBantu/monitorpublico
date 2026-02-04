@@ -13,7 +13,7 @@ DATASET = "despesas_queimados"
 TABLE = "raw_despesas_pagas"
 
 # Anos de 2024 em diante
-YEARS = [2025, 2026]
+YEARS = [2024,2025, 2026]
 
 
 def load_credentials():
