@@ -13,7 +13,7 @@ DATASET = "despesas_queimados"
 TABLE = "raw_despesas_pagas"
 
 # Anos de 2024 em diante
-YEARS = [2024, 2025, 2026]
+YEARS = [2025, 2026]
 
 
 def load_credentials():
@@ -45,7 +45,7 @@ def fetch_from_api(ano: int) -> pd.DataFrame:
     """Busca dados da API usando GET com parâmetros"""
     params = {
         "sys": "LAI",
-        "api": "despesas_todas",
+        "api": "despesas_pagas",
         "ano": ano
     }
 
