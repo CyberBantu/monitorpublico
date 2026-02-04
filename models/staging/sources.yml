@@ -1,9 +1,9 @@
 version: 2
 
 sources:
-  - name: brutos
+  - name: despesas_queimados
     database: monitorpublico
-    schema: brutos
+    schema: despesas_queimados
     tables:
-      - name: votacao_eleitos_suplentes_2022
-      - name: enderecos_geocoding_RJ
+      - name: raw_despesas_pagas
+        description: "Dados brutos de despesas pagas - API Queimados"

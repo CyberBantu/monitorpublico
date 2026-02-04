@@ -1,26 +1,24 @@
-{{ 
+{{
   config(
     materialized='incremental',
-    unique_key='processo',
+    unique_key='codigo_interno',
+    schema='intermediate_queimados',
+    alias='despesas_pagas_incremental',
     on_schema_change='sync_all_columns',
 
     partition_by={
       "field": "data_despesa",
-      "data_type": "timestamp"
+      "data_type": "date"
     },
 
-    cluster_by=["orgao","ano_exercicio"]
-  ) 
+    cluster_by=["orgao", "exercicio"]
+  )
 }}
 
-with base as (
-    select *
-    from {{ ref('stg_queimados__despesas_todas') }}
-)
-
 select *
-from base
+from {{ ref('stg_queimados__despesas_pagas') }}
+where codigo_interno is not null
 
 {% if is_incremental() %}
-  where processo not in (select processo from {{ this }})
+  and codigo_interno not in (select codigo_interno from {{ this }})
 {% endif %}
