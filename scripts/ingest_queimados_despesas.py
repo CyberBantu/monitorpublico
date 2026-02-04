@@ -6,13 +6,14 @@ from google.cloud import bigquery
 from google.oauth2 import service_account
 
 
-URL = "https://transparencia.queimados.rj.gov.br/sincronia/apidados.rule?sys=LAI"
+URL = "https://transparencia.queimados.rj.gov.br/sincronia/apidados.rule"
 
 PROJECT_ID = "monitorpublico"
 DATASET = "despesas_queimados"
-TABLE = "raw_despesas_todas"
+TABLE = "raw_despesas_pagas"
 
-YEARS = [2025, 2026]
+# Anos de 2024 em diante
+YEARS = [2024, 2025, 2026]
 
 
 def load_credentials():
@@ -21,7 +22,6 @@ def load_credentials():
     1) Credencial via GitHub Actions (GCP_KEYFILE_JSON)
     2) key.json local
     """
-
     secret_json = os.getenv("GCP_KEYFILE_JSON")
 
     # GitHub Actions — credencial no Secret
@@ -42,50 +42,60 @@ def load_credentials():
 
 
 def fetch_from_api(ano: int) -> pd.DataFrame:
-    payload = {
-        "api": "despesas_todas",
+    """Busca dados da API usando GET com parâmetros"""
+    params = {
+        "sys": "LAI",
+        "api": "despesas_pagas",
         "ano": ano
-    }
-
-    headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json"
     }
 
     print(f"📡 Consultando API para ano {ano}...")
 
-    res = requests.post(URL, json=payload, headers=headers)
-    res.raise_for_status()
+    response = requests.get(URL, params=params)
+    response.raise_for_status()
 
-    data = res.json()
+    raw = response.text
+    json_data = json.loads(raw)
 
-    if data.get("status", "").lower() not in ("sucess", "success"):
-        print(f"⚠️ API retornou erro para {ano}: {data}")
+    # Extrai os dados do JSON
+    if isinstance(json_data, dict):
+        if "dados" in json_data:
+            dados = json_data["dados"]
+        else:
+            dados = json_data
+    else:
+        dados = json_data
+
+    if not dados:
+        print(f"⚠️ Nenhum dado retornado para {ano}")
         return pd.DataFrame()
 
-    df = pd.DataFrame(data.get("dados", []))
+    df = pd.DataFrame(dados)
     df["ano_api"] = ano
+    print(f"✓ {len(df)} registros encontrados para {ano}")
     return df
 
 
-def get_existing_ids(client):
+def get_existing_ids(client, id_column: str = "codigo_interno"):
+    """Busca IDs já existentes no BigQuery para evitar duplicatas"""
     query = f"""
-        SELECT DISTINCT CAST(codigo_interno AS STRING) AS codigo_interno
+        SELECT DISTINCT CAST({id_column} AS STRING) AS {id_column}
         FROM `{PROJECT_ID}.{DATASET}.{TABLE}`
     """
 
     try:
         df = client.query(query).to_dataframe()
-        return set(df["codigo_interno"])
-    except Exception:
+        return set(df[id_column])
+    except Exception as e:
+        print(f"⚠️ Tabela não existe ou erro ao consultar: {e}")
         return set()
 
 
 def load_to_bq(client, df):
+    """Carrega DataFrame no BigQuery"""
     table_ref = f"{PROJECT_ID}.{DATASET}.{TABLE}"
 
     # Converte todas as colunas para string para evitar conflitos de tipo
-    # O dbt vai fazer a conversão de tipos na camada staging
     df = df.astype(str)
 
     # Substitui 'nan' por None para campos vazios
@@ -94,15 +104,17 @@ def load_to_bq(client, df):
 
     job_config = bigquery.LoadJobConfig(
         write_disposition="WRITE_APPEND",
-        autodetect=True  # Deixa o BigQuery inferir o schema
+        autodetect=True
     )
 
     job = client.load_table_from_dataframe(df, table_ref, job_config=job_config)
     job.result()
+    print(f"✅ Dados carregados na tabela {table_ref}")
 
 
 def main():
-    print("🚀 Iniciando ingestão incremental...")
+    print("🚀 Iniciando ingestão de despesas pagas...")
+    print(f"📅 Anos: {YEARS}")
 
     credentials = load_credentials()
 
@@ -111,7 +123,9 @@ def main():
         project=PROJECT_ID
     )
 
+    # Busca IDs existentes para evitar duplicatas
     existing_ids = get_existing_ids(client)
+    print(f"📊 {len(existing_ids)} registros já existentes no BigQuery")
 
     dfs = []
 
@@ -121,12 +135,15 @@ def main():
         if df.empty:
             continue
 
-        df["codigo_interno"] = df["codigo_interno"].astype(str)
-
-        # Remove registros já existentes
-        df = df[~df["codigo_interno"].isin(existing_ids)]
-
-        if not df.empty:
+        # Verifica se tem coluna de ID para deduplicação
+        if "codigo_interno" in df.columns:
+            df["codigo_interno"] = df["codigo_interno"].astype(str)
+            df_new = df[~df["codigo_interno"].isin(existing_ids)]
+            print(f"  → {len(df_new)} novos registros para {year}")
+            if not df_new.empty:
+                dfs.append(df_new)
+        else:
+            # Se não tem ID, adiciona todos
             dfs.append(df)
 
     if not dfs:
@@ -134,10 +151,11 @@ def main():
         return
 
     final_df = pd.concat(dfs, ignore_index=True)
+    print(f"\n📦 Total de novos registros: {len(final_df)}")
 
     load_to_bq(client, final_df)
 
-    print(f"✅ Inseridos {len(final_df)} novos registros.")
+    print(f"\n✅ Ingestão concluída! {len(final_df)} registros inseridos.")
 
 
 if __name__ == "__main__":

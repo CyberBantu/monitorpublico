@@ -1,46 +1,45 @@
-name: Pipeline de Dados - Monitor Público
+name: dbt Run
 
 on:
   push:
     branches:
       - main
+    paths:
+      - 'models/**'
+      - 'macros/**'
+      - 'dbt_project.yml'
   schedule:
-    - cron: "0 17 * * *"  # Executa diariamente às 17h UTC (14h Brasília)
+    - cron: "30 12 * * *"  # Diariamente às 9:30h Brasília (12:30h UTC) - depois da ingestão
   workflow_dispatch:  # Permite executar manualmente
 
 env:
   PYTHON_VERSION: '3.11'
 
 jobs:
-  ingestao-e-transformacao:
-    name: Ingestão e Transformação dbt
+  dbt-run:
+    name: dbt Run
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout do código
       - name: Checkout do repositório
         uses: actions/checkout@v4
 
-      # 2. Configurar Python
       - name: Configurar Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
 
-      # 3. Instalar dependências
       - name: Instalar dependências
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # 4. Autenticar no Google Cloud
       - name: Autenticar no Google Cloud
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_KEYFILE_JSON }}
 
-      # 5. Criar profiles.yml para dbt
       - name: Configurar profiles.yml do dbt
         run: |
           mkdir -p ~/.dbt
@@ -59,38 +58,26 @@ jobs:
                 location: US
           EOF
 
-      # 6. Executar script de ingestão
-      - name: Executar ingestão de dados (API Queimados)
-        env:
-          GCP_KEYFILE_JSON: ${{ secrets.GCP_KEYFILE_JSON }}
-        run: |
-          echo "🚀 Iniciando ingestão de dados..."
-          python scripts/ingest_queimados_despesas.py
-
-      # 7. Verificar conexão dbt
       - name: Verificar conexão dbt
         run: |
           echo "🔍 Verificando conexão com BigQuery..."
           dbt debug
 
-      # 8. Executar dbt run
       - name: Executar dbt run
         run: |
           echo "🔄 Executando transformações dbt..."
           dbt run
 
-      # 9. Executar testes dbt (opcional)
       - name: Executar testes dbt
         run: |
           echo "🧪 Executando testes dbt..."
-          dbt test || echo "⚠️ Alguns testes falharam, mas continuando..."
+          dbt test || echo "⚠️ Alguns testes falharam"
         continue-on-error: true
 
-  # Job para notificação de falha
   notificar-falha:
-    name: Notificar Falha por Email
+    name: Notificar Falha
     runs-on: ubuntu-latest
-    needs: ingestao-e-transformacao
+    needs: dbt-run
     if: failure()
 
     steps:
@@ -101,25 +88,24 @@ jobs:
           server_port: 587
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "❌ Pipeline Monitor Público Falhou"
+          subject: "❌ dbt Run Falhou"
           to: christianbasilio97@gmail.com
-          from: Monitor Público Pipeline <${{ secrets.EMAIL_USERNAME }}>
+          from: Monitor Público <${{ secrets.EMAIL_USERNAME }}>
           body: |
-            🚨 A pipeline de dados falhou!
+            🚨 O dbt run falhou!
 
             📋 Detalhes:
             - Repositório: ${{ github.repository }}
             - Branch: ${{ github.ref_name }}
             - Commit: ${{ github.sha }}
-            - Autor: ${{ github.actor }}
+            - Workflow: dbt Run
 
             🔗 Ver logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
-  # Job para notificação de sucesso
   notificar-sucesso:
-    name: Notificar Sucesso por Email
+    name: Notificar Sucesso
     runs-on: ubuntu-latest
-    needs: ingestao-e-transformacao
+    needs: dbt-run
     if: success()
 
     steps:
@@ -130,16 +116,15 @@ jobs:
           server_port: 587
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "✅ Pipeline Monitor Público - Sucesso"
+          subject: "✅ dbt Run - Sucesso"
           to: christianbasilio97@gmail.com
-          from: Monitor Público Pipeline <${{ secrets.EMAIL_USERNAME }}>
+          from: Monitor Público <${{ secrets.EMAIL_USERNAME }}>
           body: |
-            ✅ A pipeline de dados foi executada com sucesso!
+            ✅ dbt run executado com sucesso!
 
             📋 Detalhes:
             - Repositório: ${{ github.repository }}
             - Branch: ${{ github.ref_name }}
             - Commit: ${{ github.sha }}
-            - Autor: ${{ github.actor }}
 
             🔗 Ver logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
