@@ -6,3 +6,11 @@ logs/
 __pycache__/
 *.pyc
 dbt_internal_packages/
+testeapi.ipynb
+testecarregamento.py
+
+# Service Account Keys - NUNCA commitar!
+*.json
+!dbt_project.json
+!package.json
+monitorpublico-*.json

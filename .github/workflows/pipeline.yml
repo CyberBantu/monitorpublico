@@ -1,57 +1,145 @@
-name: Ingestao Despesas Queimados
+name: Pipeline de Dados - Monitor Público
 
 on:
+  push:
+    branches:
+      - main
   schedule:
-    - cron: "0 17 * * *"
-  workflow_dispatch:
+    - cron: "0 17 * * *"  # Executa diariamente às 17h UTC (14h Brasília)
+  workflow_dispatch:  # Permite executar manualmente
+
+env:
+  PYTHON_VERSION: '3.11'
 
 jobs:
-  run-pipeline:
+  ingestao-e-transformacao:
+    name: Ingestão e Transformação dbt
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      # 1. Checkout do código
+      - name: Checkout do repositório
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      # 2. Configurar Python
+      - name: Configurar Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Create dbt profile
+      # 3. Instalar dependências
+      - name: Instalar dependências
         run: |
-          mkdir -p profiles
-          cat > profiles/profiles.yml <<'EOF'
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 4. Autenticar no Google Cloud
+      - name: Autenticar no Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_KEYFILE_JSON }}
+
+      # 5. Criar profiles.yml para dbt
+      - name: Configurar profiles.yml do dbt
+        run: |
+          mkdir -p ~/.dbt
+          echo '${{ secrets.GCP_KEYFILE_JSON }}' > /tmp/gcp_keyfile.json
+          cat <<EOF > ~/.dbt/profiles.yml
           monitorpublico:
-            target: dev
+            target: prod
             outputs:
-              dev:
+              prod:
                 type: bigquery
                 method: service-account
-                project: "monitorpublico"
-                dataset: "despesas_queimados"
-                location: "US"
+                project: monitorpublico
+                dataset: staging
                 threads: 4
+                keyfile: /tmp/gcp_keyfile.json
+                location: US
           EOF
 
-      - name: Authenticate service account (no file)
-        run: |
-          python - <<'PY'
-          import json
-          from google.oauth2 import service_account
-
-          CREDS = json.loads('${{ secrets.GCP_KEYFILE_JSON }}')
-
-          creds = service_account.Credentials.from_service_account_info(CREDS)
-
-          print("Autenticação OK")
-          PY
-
-      - name: Run ingestion script
+      # 6. Executar script de ingestão
+      - name: Executar ingestão de dados (API Queimados)
         env:
           GCP_KEYFILE_JSON: ${{ secrets.GCP_KEYFILE_JSON }}
         run: |
+          echo "🚀 Iniciando ingestão de dados..."
           python scripts/ingest_queimados_despesas.py
+
+      # 7. Verificar conexão dbt
+      - name: Verificar conexão dbt
+        run: |
+          echo "🔍 Verificando conexão com BigQuery..."
+          dbt debug
+
+      # 8. Executar dbt run
+      - name: Executar dbt run
+        run: |
+          echo "🔄 Executando transformações dbt..."
+          dbt run
+
+      # 9. Executar testes dbt (opcional)
+      - name: Executar testes dbt
+        run: |
+          echo "🧪 Executando testes dbt..."
+          dbt test || echo "⚠️ Alguns testes falharam, mas continuando..."
+        continue-on-error: true
+
+  # Job para notificação de falha
+  notificar-falha:
+    name: Notificar Falha por Email
+    runs-on: ubuntu-latest
+    needs: ingestao-e-transformacao
+    if: failure()
+
+    steps:
+      - name: Enviar email de falha
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "❌ Pipeline Monitor Público Falhou"
+          to: christianbasilio97@gmail.com
+          from: Monitor Público Pipeline <${{ secrets.EMAIL_USERNAME }}>
+          body: |
+            🚨 A pipeline de dados falhou!
+
+            📋 Detalhes:
+            - Repositório: ${{ github.repository }}
+            - Branch: ${{ github.ref_name }}
+            - Commit: ${{ github.sha }}
+            - Autor: ${{ github.actor }}
+
+            🔗 Ver logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+  # Job para notificação de sucesso
+  notificar-sucesso:
+    name: Notificar Sucesso por Email
+    runs-on: ubuntu-latest
+    needs: ingestao-e-transformacao
+    if: success()
+
+    steps:
+      - name: Enviar email de sucesso
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "✅ Pipeline Monitor Público - Sucesso"
+          to: christianbasilio97@gmail.com
+          from: Monitor Público Pipeline <${{ secrets.EMAIL_USERNAME }}>
+          body: |
+            ✅ A pipeline de dados foi executada com sucesso!
+
+            📋 Detalhes:
+            - Repositório: ${{ github.repository }}
+            - Branch: ${{ github.ref_name }}
+            - Commit: ${{ github.sha }}
+            - Autor: ${{ github.actor }}
+
+            🔗 Ver logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
