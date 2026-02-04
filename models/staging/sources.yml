@@ -1,0 +1,9 @@
+version: 2
+
+sources:
+  - name: brutos
+    database: monitorpublico
+    schema: brutos
+    tables:
+      - name: votacao_eleitos_suplentes_2022
+      - name: enderecos_geocoding_RJ

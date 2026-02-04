@@ -45,7 +45,7 @@ def fetch_from_api(ano: int) -> pd.DataFrame:
     """Busca dados da API usando GET com parâmetros"""
     params = {
         "sys": "LAI",
-        "api": "despesas_pagas",
+        "api": "despesas_todas",
         "ano": ano
     }
 

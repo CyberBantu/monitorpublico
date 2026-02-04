@@ -11,11 +11,12 @@ snapshot-paths: ["snapshots"]
 
 models:
   monitorpublico:
-    sources:
-      +schema: raw
     staging:
       +schema: staging
     intermediate:
       +schema: intermediate
     marts:
       +schema: marts
+
+
+      

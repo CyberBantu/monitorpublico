@@ -14,3 +14,8 @@ testecarregamento.py
 !dbt_project.json
 !package.json
 monitorpublico-*.json
+stg_rj__eleicao_2022.sql
+stg_enderecos_geocode.sql
+mart_rj__eleicao__2022_agg1.sql
+mart_rj_eleicao_georef_filtros.sql
+int_rj_eleicao_georef.sql
