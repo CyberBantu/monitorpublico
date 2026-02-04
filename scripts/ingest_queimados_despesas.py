@@ -84,8 +84,17 @@ def get_existing_ids(client):
 def load_to_bq(client, df):
     table_ref = f"{PROJECT_ID}.{DATASET}.{TABLE}"
 
+    # Converte todas as colunas para string para evitar conflitos de tipo
+    # O dbt vai fazer a conversão de tipos na camada staging
+    df = df.astype(str)
+
+    # Substitui 'nan' por None para campos vazios
+    df = df.replace('nan', None)
+    df = df.replace('None', None)
+
     job_config = bigquery.LoadJobConfig(
-        write_disposition="WRITE_APPEND"
+        write_disposition="WRITE_APPEND",
+        autodetect=True  # Deixa o BigQuery inferir o schema
     )
 
     job = client.load_table_from_dataframe(df, table_ref, job_config=job_config)
