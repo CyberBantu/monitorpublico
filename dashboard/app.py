@@ -183,6 +183,13 @@ def fmt_number(v):
     """Formata número grande para exibição"""
     return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
+def fmt_label(v):
+    """Formata valor para label do gráfico (B para bilhões, M para milhões)"""
+    if v >= 1_000_000_000:
+        return f"{v/1_000_000_000:.2f}B"
+    else:
+        return f"{v/1_000_000:.1f}M"
+
 # ============================================
 # LAYOUT
 # ============================================
@@ -619,6 +626,7 @@ def update_dashboard(anos, secretarias, funcoes, fontes):
     df_sec = df_f.groupby("secretaria_padronizada", as_index=False)["total_despesa"].sum()
     df_sec = df_sec.sort_values("total_despesa", ascending=True)
     df_sec["valor_fmt"] = df_sec["total_despesa"].apply(fmt_number)
+    df_sec["label"] = df_sec["total_despesa"].apply(fmt_label)
 
     altura_sec = max(300, len(df_sec) * 28)
 
@@ -627,13 +635,16 @@ def update_dashboard(anos, secretarias, funcoes, fontes):
         orientation="h",
         marker=dict(color=COLORS["primary"], cornerradius=4),
         hovertemplate="<b>%{y}</b><br>Despesas Pagas: %{customdata}<extra></extra>",
+        text=df_sec["label"],
+        textposition="outside",
+        textfont=dict(size=9, color=COLORS["text_light"]),
         customdata=df_sec["valor_fmt"]
     ))
     fig_sec.update_layout(
-        margin=dict(t=10, b=10, l=10, r=10),
+        margin=dict(t=10, b=10, l=10, r=60),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         xaxis=dict(showgrid=False, showticklabels=False),
-        yaxis=dict(showgrid=False, tickfont=dict(size=10, color=COLORS["text_light"])),
+        yaxis=dict(showgrid=False, tickfont=dict(size=9, color=COLORS["text_light"])),
         height=altura_sec
     )
 
@@ -642,6 +653,7 @@ def update_dashboard(anos, secretarias, funcoes, fontes):
         df_unid = df_f.groupby("unidade_orcamentaria", as_index=False)["total_despesa"].sum()
         df_unid = df_unid.sort_values("total_despesa", ascending=True)
         df_unid["valor_fmt"] = df_unid["total_despesa"].apply(fmt_number)
+        df_unid["label"] = df_unid["total_despesa"].apply(fmt_label)
 
         altura_unid = max(300, len(df_unid) * 28)
 
@@ -650,16 +662,16 @@ def update_dashboard(anos, secretarias, funcoes, fontes):
             orientation="h",
             marker=dict(color=COLORS["secondary"], cornerradius=4),
             hovertemplate="<b>%{y}</b><br>Despesas Pagas: %{customdata}<extra></extra>",
-            # adicionando label abreviado para milhoes
-                text=df_unid["total_despesa"].apply(lambda x: f"{x/1e6:.2f}M"),
-                textposition="outside",
+            text=df_unid["label"],
+            textposition="outside",
+            textfont=dict(size=9, color=COLORS["text_light"]),
             customdata=df_unid["valor_fmt"]
         ))
         fig_unid.update_layout(
-            margin=dict(t=10, b=10, l=10, r=10),
+            margin=dict(t=10, b=10, l=10, r=60),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
             xaxis=dict(showgrid=False, showticklabels=False),
-            yaxis=dict(showgrid=False, tickfont=dict(size=10, color=COLORS["text_light"])),
+            yaxis=dict(showgrid=False, tickfont=dict(size=9, color=COLORS["text_light"])),
             height=altura_unid
         )
     else:
@@ -672,6 +684,7 @@ def update_dashboard(anos, secretarias, funcoes, fontes):
     df_func = df_f.groupby("funcao", as_index=False)["total_despesa"].sum()
     df_func = df_func.sort_values("total_despesa", ascending=True)
     df_func["valor_fmt"] = df_func["total_despesa"].apply(fmt_number)
+    df_func["label"] = df_func["total_despesa"].apply(fmt_label)
 
     altura_func = max(250, len(df_func) * 28)
 
@@ -680,17 +693,16 @@ def update_dashboard(anos, secretarias, funcoes, fontes):
         orientation="h",
         marker=dict(color=COLORS["accent"], cornerradius=4),
         hovertemplate="<b>%{y}</b><br>Despesas Pagas: %{customdata}<extra></extra>",
-        # adicionando label abreviado para milhoes
-        text=df_func["total_despesa"].apply(lambda x: f"{x/1e6:.2f}M"),
+        text=df_func["label"],
         textposition="outside",
-        
+        textfont=dict(size=9, color=COLORS["text_light"]),
         customdata=df_func["valor_fmt"]
     ))
     fig_func.update_layout(
-        margin=dict(t=10, b=10, l=10, r=10),
+        margin=dict(t=10, b=10, l=10, r=60),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         xaxis=dict(showgrid=False, showticklabels=False),
-        yaxis=dict(showgrid=False, tickfont=dict(size=10, color=COLORS["text_light"])),
+        yaxis=dict(showgrid=False, tickfont=dict(size=9, color=COLORS["text_light"])),
         height=altura_func
     )
 
@@ -698,6 +710,7 @@ def update_dashboard(anos, secretarias, funcoes, fontes):
     df_mod = df_f.groupby("modalidade_licitacao", as_index=False)["total_despesa"].sum()
     df_mod = df_mod.sort_values("total_despesa", ascending=True)
     df_mod["valor_fmt"] = df_mod["total_despesa"].apply(fmt_number)
+    df_mod["label"] = df_mod["total_despesa"].apply(fmt_label)
 
     altura_mod = max(250, len(df_mod) * 28)
 
@@ -706,16 +719,16 @@ def update_dashboard(anos, secretarias, funcoes, fontes):
         orientation="h",
         marker=dict(color=COLORS["success"], cornerradius=4),
         hovertemplate="<b>%{y}</b><br>Despesas Pagas: %{customdata}<extra></extra>",
-        # adicionando label abreviado para milhoes
-        text=df_mod["total_despesa"].apply(lambda x: f"{x/1e6:.2f}M"),
+        text=df_mod["label"],
         textposition="outside",
+        textfont=dict(size=9, color=COLORS["text_light"]),
         customdata=df_mod["valor_fmt"]
     ))
     fig_mod.update_layout(
-        margin=dict(t=10, b=10, l=10, r=10),
+        margin=dict(t=10, b=10, l=10, r=60),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         xaxis=dict(showgrid=False, showticklabels=False),
-        yaxis=dict(showgrid=False, tickfont=dict(size=10, color=COLORS["text_light"])),
+        yaxis=dict(showgrid=False, tickfont=dict(size=9, color=COLORS["text_light"])),
         height=altura_mod
     )
 
