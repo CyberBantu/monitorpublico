@@ -23,6 +23,7 @@ import tempfile
 PROJECT_ID = "monitorpublico"
 DATASET = "staging_marts_queimados"
 TABLE = "gastos_por_secretaria"
+TABLE_DETALHADA = "registros_detalhados"
 
 # ============================================
 # CONEXÃO COM BIGQUERY
@@ -77,16 +78,43 @@ def load_data():
     return df
 
 
+def load_data_detalhada():
+    """Carrega registros individuais (não agregados)"""
+    credentials = get_credentials()
+    client = bigquery.Client(credentials=credentials, project=PROJECT_ID)
+
+    query = f"""
+    SELECT *
+    FROM `{PROJECT_ID}.{DATASET}.{TABLE_DETALHADA}`
+    """
+
+    df = client.query(query).to_dataframe()
+
+    # Conversões básicas
+    df["valor_despesa"] = pd.to_numeric(df["valor_despesa"], errors="coerce").fillna(0)
+    df["ano"] = pd.to_numeric(df["ano"], errors="coerce")
+    df["data_despesa"] = pd.to_datetime(df["data_despesa"], errors="coerce")
+
+    return df
+
+
 # ============================================
 # CARREGAR DADOS
 # ============================================
 
 try:
     df = load_data()
-    print("✅ Dados carregados do BigQuery")
+    print("✅ Dados agregados carregados do BigQuery")
 except Exception as e:
-    print(f"❌ Erro: {e}")
+    print(f"❌ Erro ao carregar dados agregados: {e}")
     df = pd.DataFrame()
+
+try:
+    df_registros = load_data_detalhada()
+    print(f"✅ Registros detalhados carregados: {len(df_registros)} registros")
+except Exception as e:
+    print(f"❌ Erro ao carregar registros detalhados: {e}")
+    df_registros = pd.DataFrame()
 
 # ============================================
 # APP
@@ -400,11 +428,29 @@ app.layout = html.Div([
             "marginBottom": "20px"
         }),
 
-        # ========== LINHA 5: Tabela ==========
+        # ========== LINHA 5: Tabela Agregada ==========
         html.Div([
-            html.Div("Detalhamento das Despesas Pagas por Secretaria, Função e Subfunção", style=title_style),
+            html.Div("Despesas Pagas por Secretaria, Função e Subfunção", style=title_style),
             html.Div(id="tabela-container")
         ], style=card_style),
+
+        # ========== LINHA 6: Tabela de Registros Detalhados ==========
+        html.Div([
+            html.Div([
+                html.Span("Registros Detalhados", style={
+                    **title_style,
+                    "display": "inline-block",
+                    "marginBottom": "0",
+                    "marginRight": "15px"
+                }),
+                html.Span("Dados não agregados • Visualize cada registro individualmente", style={
+                    "fontSize": "11px",
+                    "color": COLORS["text_light"],
+                    "fontStyle": "italic"
+                })
+            ], style={"marginBottom": "15px"}),
+            html.Div(id="tabela-detalhada-container", style={"overflowX": "auto"})
+        ], style={**card_style, "marginTop": "20px"}),
 
         # ========== SOBRE O PROJETO ==========
         html.Div([
@@ -544,6 +590,7 @@ app.layout = html.Div([
         Output("grafico-funcao", "figure"),
         Output("grafico-modalidade", "figure"),
         Output("tabela-container", "children"),
+        Output("tabela-detalhada-container", "children"),
     ],
     [
         Input("filtro-ano", "value"),
@@ -732,7 +779,7 @@ def update_dashboard(anos, secretarias, funcoes, fontes):
         height=altura_mod
     )
 
-    # ========== Tabela ==========
+    # ========== Tabela Agregada ==========
     df_tab = df_f.groupby(
         ["secretaria_padronizada", "funcao", "subfuncao"], as_index=False
     )["total_despesa"].sum()
@@ -773,9 +820,137 @@ def update_dashboard(anos, secretarias, funcoes, fontes):
         sort_action="native"
     )
 
+    # ========== Tabela Detalhada (Registros Individuais) ==========
+    # Usa a tabela de registros detalhados (não agregados)
+    df_det = df_registros.copy()
+
+    # Aplica os mesmos filtros
+    if anos:
+        df_det = df_det[df_det["ano"].isin(anos)]
+    if secretarias:
+        df_det = df_det[df_det["secretaria"].isin(secretarias)]
+    if funcoes:
+        df_det = df_det[df_det["funcao"].isin(funcoes)]
+    if fontes and "fonte" in df_det.columns:
+        df_det = df_det[df_det["fonte"].isin(fontes)]
+
+    # Colunas para exibição (nomes originais do banco)
+    colunas_exibir = [
+        "data_despesa", "ano", "secretaria", "funcao", "subfuncao",
+        "programa", "elemento_despesa", "despesa_descricao",
+        "favorecido", "modalidade_licitacao", "fonte", "tipo", "valor_despesa"
+    ]
+
+    # Filtra apenas colunas que existem
+    colunas_existentes = [c for c in colunas_exibir if c in df_det.columns]
+
+    # Prepara os dados
+    df_detalhado = df_det[colunas_existentes].copy()
+    df_detalhado = df_detalhado.sort_values(
+        ["data_despesa", "valor_despesa"],
+        ascending=[False, False]
+    )
+
+    # Formata a data para exibição
+    if "data_despesa" in df_detalhado.columns:
+        df_detalhado["data_despesa"] = pd.to_datetime(df_detalhado["data_despesa"]).dt.strftime("%d/%m/%Y")
+
+    # Mapeia tipo para nome legível
+    if "tipo" in df_detalhado.columns:
+        df_detalhado["tipo"] = df_detalhado["tipo"].map({"J": "PJ", "F": "PF"}).fillna(df_detalhado["tipo"])
+
+    # Define as colunas da tabela com nomes amigáveis
+    colunas_tabela_detalhada = []
+    mapeamento_nomes = {
+        "data_despesa": "Data",
+        "ano": "Ano",
+        "secretaria": "Secretaria",
+        "funcao": "Função",
+        "subfuncao": "Subfunção",
+        "programa": "Programa",
+        "elemento_despesa": "Elemento",
+        "despesa_descricao": "Descrição",
+        "favorecido": "Favorecido",
+        "modalidade_licitacao": "Modalidade",
+        "fonte": "Fonte",
+        "tipo": "Tipo",
+        "valor_despesa": "Valor Pago"
+    }
+
+    for col in colunas_existentes:
+        col_config = {"name": mapeamento_nomes.get(col, col), "id": col}
+        if col == "valor_despesa":
+            col_config["type"] = "numeric"
+            col_config["format"] = {"specifier": ",.2f", "locale": {"symbol": ["R$ ", ""], "group": ".", "decimal": ","}}
+        colunas_tabela_detalhada.append(col_config)
+
+    # Contador de registros
+    total_registros_tabela = len(df_detalhado)
+
+    tabela_detalhada = html.Div([
+        # Info do total de registros
+        html.Div([
+            html.Span(f"Total: ", style={"color": COLORS["text_light"], "fontSize": "12px"}),
+            html.Span(f"{total_registros_tabela:,}".replace(",", "."), style={
+                "color": COLORS["primary"],
+                "fontWeight": "700",
+                "fontSize": "14px"
+            }),
+            html.Span(" registros", style={"color": COLORS["text_light"], "fontSize": "12px"})
+        ], style={"marginBottom": "10px"}),
+
+        # Tabela
+        dash_table.DataTable(
+            data=df_detalhado.to_dict("records"),
+            columns=colunas_tabela_detalhada,
+            style_table={"overflowX": "auto", "minWidth": "100%"},
+            style_cell={
+                "textAlign": "left",
+                "padding": "8px 10px",
+                "fontSize": "10px",
+                "backgroundColor": "transparent",
+                "color": COLORS["text"],
+                "border": "none",
+                "borderBottom": f"1px solid {COLORS['border']}",
+                "whiteSpace": "normal",
+                "height": "auto",
+                "minWidth": "70px",
+                "maxWidth": "180px"
+            },
+            style_cell_conditional=[
+                {"if": {"column_id": "secretaria"}, "minWidth": "120px", "maxWidth": "200px"},
+                {"if": {"column_id": "despesa_descricao"}, "minWidth": "120px", "maxWidth": "250px"},
+                {"if": {"column_id": "favorecido"}, "minWidth": "120px", "maxWidth": "200px"},
+                {"if": {"column_id": "data_despesa"}, "minWidth": "80px", "maxWidth": "90px"},
+                {"if": {"column_id": "ano"}, "minWidth": "45px", "maxWidth": "55px"},
+                {"if": {"column_id": "tipo"}, "minWidth": "35px", "maxWidth": "45px"},
+                {"if": {"column_id": "valor_despesa"}, "minWidth": "90px", "maxWidth": "120px", "fontWeight": "600"},
+            ],
+            style_header={
+                "backgroundColor": COLORS["primary"],
+                "color": "white",
+                "fontWeight": "600",
+                "fontSize": "9px",
+                "textTransform": "uppercase",
+                "letterSpacing": "0.5px",
+                "padding": "10px 8px"
+            },
+            style_data_conditional=[
+                {"if": {"row_index": "odd"}, "backgroundColor": "#f8fafc"},
+                {"if": {"column_id": "valor_despesa"}, "color": COLORS["primary"]}
+            ],
+            page_size=5,
+            page_action="native",
+            sort_action="native",
+            sort_mode="multi",
+            filter_action="native",
+            filter_options={"placeholder_text": "Filtrar..."},
+        )
+    ])
+
     return (
         kpi_total, kpi_media, kpi_registros,
-        fig_temporal, fig_tipo, fig_sec, fig_unid, fig_func, fig_mod, tabela
+        fig_temporal, fig_tipo, fig_sec, fig_unid, fig_func, fig_mod, tabela, tabela_detalhada
     )
 
 
