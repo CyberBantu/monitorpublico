@@ -10,7 +10,7 @@ analysis-paths: ["analyses"]
 snapshot-paths: ["snapshots"]
 
 models:
-  monitorpublico:
+  monito_publico:
     staging:
       +schema: staging
     intermediate:

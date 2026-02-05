@@ -2,6 +2,7 @@ version: 2
 
 sources:
   - name: despesas_queimados
+    description: "Dados brutos de despesas do município de Queimados - RJ"
     database: monitorpublico
     schema: despesas_queimados
     tables:

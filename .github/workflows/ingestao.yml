@@ -10,7 +10,7 @@ env:
 
 jobs:
   ingestao:
-    name: Ingestão API Queimados
+    name: Ingestão - Queimados
     runs-on: ubuntu-latest
 
     steps:
@@ -33,11 +33,11 @@ jobs:
         with:
           credentials_json: ${{ secrets.GCP_KEYFILE_JSON }}
 
-      - name: Executar ingestão de dados
+      - name: Executar ingestão Queimados
         env:
           GCP_KEYFILE_JSON: ${{ secrets.GCP_KEYFILE_JSON }}
         run: |
-          echo "🚀 Iniciando ingestão de dados..."
+          echo "🚀 Iniciando ingestão - Queimados..."
           python scripts/ingest_queimados_despesas.py
 
   notificar-falha:
@@ -87,8 +87,7 @@ jobs:
           body: |
             ✅ Ingestão de dados concluída com sucesso!
 
-            📋 Detalhes:
-            - Repositório: ${{ github.repository }}
-            - Workflow: Ingestão de Dados
+            📋 Município processado:
+            - Queimados
 
             🔗 Ver logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
