@@ -494,7 +494,7 @@ app.layout = html.Div([
                     "margin": "0"
                 }),
                 html.P([
-                    "Monitor Público © 2024-2025 • Todos os dados são obtidos do Portal da Transparência de Queimados"
+                    "Monitor Público 2026 • Todos os dados são obtidos do Portal da Transparência de Queimados"
                 ], style={
                     "color": COLORS["text_light"],
                     "fontSize": "11px",
